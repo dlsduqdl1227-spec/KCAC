@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>KCAC 2026</title>
+<style>
+/* ============================================================
+   KCAC 2026  |  채점 시스템
+   Palette: #111 (black) · #555 (gray-mid) · #999 (gray-light)
+            #e0e0e0 (border) · #f4f4f4 (surface) · #fff (white)
+   Font: Noto Sans KR + IBM Plex Mono
+   NO color accents. NO emoji.
+============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+
+/* ── 변수 ─────────────────────────── */
+:root {
+  --c0: #111111;   /* near-black  */
+  --c1: #333333;   /* dark-gray   */
+  --c2: #555555;   /* mid-gray    */
+  --c3: #888888;   /* light-gray  */
+  --c4: #bbbbbb;   /* pale-gray   */
+  --c5: #e0e0e0;   /* border      */
+  --c6: #f0f0f0;   /* surface     */
+  --c7: #f8f8f8;   /* bg-subtle   */
+  --cW: #ffffff;   /* white       */
+
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+
+  /* safe areas */
+  --st: env(safe-area-inset-top,    0px);
+  --sb: env(safe-area-inset-bottom, 0px);
+  --sl: env(safe-area-inset-left,   0px);
+  --sr: env(safe-area-inset-right,  0px);
+}
+
+/* ── 리셋 ─────────────────────────── */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--sans);
+  font-size: 14px;
+  background: var(--cW);
+  color: var(--c0);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+input,select,textarea,button { font-family: var(--sans); font-size: inherit; -webkit-appearance: none; appearance: none; }
+button { cursor: pointer; border: none; background: none; color: inherit; }
+
+/* ── 스크롤바 ─────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
+::-webkit-scrollbar-thumb { background: var(--c5); }
+
+/* ============================================================
+   앱 뼈대  (fixed, 3-row flex)
+============================================================ */
+#app {
+  position: fixed;
+  inset: 0;
+  display: none;           /* show after login */
+  flex-direction: column;
+  padding-top: var(--st);
+  padding-left: var(--sl);
+  padding-right: var(--sr);
+}
+#app.visible { display: flex; }
+
+/* ── 상단 바 ──────────────────────── */
+.topbar {
+  flex: 0 0 auto;
+  height: 52px;
+  background: var(--c0);
+  color: var(--cW);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+}
+.topbar-logo {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--c4);
+}
+.topbar-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.topbar-name {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.topbar-role {
+  font-size: 10px;
+  color: var(--c4);
+  letter-spacing: 0.3px;
+}
+
+/* ── 탭 바 ───────────────────────── */
+.tabbar {
+  flex: 0 0 auto;
+  display: flex;
+  background: var(--cW);
+  border-bottom: 1.5px solid var(--c0);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.tabbar::-webkit-scrollbar { display: none; }
+.tab {
+  flex: 0 0 auto;
+  height: 42px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--c4);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab.on { color: var(--c0); border-bottom-color: var(--c0); }
+.tab-pill {
+  font-size: 9px;
+  font-weight: 700;
+  background: var(--c0);
+  color: var(--cW);
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0;
+}
+.tab.on .tab-pill { background: var(--c0); }
+
+/* ── 패널 래퍼 ────────────────────── */
+.panels {
+  flex: 1 1 0;
+  min-height: 0;          /* flex child가 넘치지 않게 */
+  position: relative;
+  overflow: hidden;
+}
+.panel {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: none;
+  /* 하단 여백 = safe-area + 충분한 여백 */
+  padding-bottom: calc(var(--sb) + 40px);
+  background: var(--c7);
+}
+.panel.on { display: block; }
+
+/* ============================================================
+   공통 레이아웃 블록
+============================================================ */
+
+/* 섹션 카드 */
+.card {
+  background: var(--cW);
+  border-radius: 0;
+  margin-bottom: 8px;
+}
+.card:first-child { margin-top: 0; }
+
+/* 카드 헤더 */
+.card-title {
+  padding: 16px 18px 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--c0);
+  line-height: 1.25;
+}
+.card-sub {
+  padding: 4px 18px 14px;
+  font-size: 11px;
+  color: var(--c3);
+  line-height: 1.5;
+  border-bottom: 1px solid var(--c6);
+}
+
+/* 구분 레이블 */
+.sec-label {
+  padding: 10px 18px 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--c3);
+  border-bottom: 1px solid var(--c6);
+}
+
+/* 알림 바 */
+.notice {
+  padding: 10px 18px;
+  background: var(--c6);
+  border-left: 3px solid var(--c0);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c1);
+  line-height: 1.5;
+}
+
+/* 인풋 행 */
+.field {
+  display: flex;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--c6);
+  gap: 12px;
+}
+.field:last-child { border-bottom: none; }
+.field-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--c3);
+  letter-spacing: 0.5px;
+  width: 76px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+.inp {
+  flex: 1;
+  height: 40px;
+  background: var(--c7);
+  border: 1.5px solid var(--c5);
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: var(--c0);
+  outline: none;
+  transition: border-color 0.15s;
+  min-width: 0;
+}
+.inp:focus { border-color: var(--c0); background: var(--cW); }
+.inp::placeholder { color: var(--c4); }
+select.inp {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 30px;
+}
+
+/* ============================================================
+   타이머
+============================================================ */
+.timer-block {
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid var(--c6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.timer-val {
+  font-family: var(--mono);
+  font-size: 48px;
+  font-weight: 600;
+  color: var(--c0);
+  letter-spacing: -2px;
+  line-height: 1;
+  transition: color 0.3s;
+}
+.timer-val.warn   { color: var(--c2); }
+.timer-val.urgent { color: var(--c0); animation: tflash 0.7s step-end infinite; }
+@keyframes tflash { 50% { opacity: 0.15; } }
+.timer-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--c3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.timer-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+/* ============================================================
+   채점 행
+============================================================ */
+.score-row {
+  display: flex;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--c6);
+  gap: 10px;
+  min-height: 60px;
+}
+.score-row:last-child { border-bottom: none; }
+.score-meta { flex: 1; min-width: 0; }
+.score-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.score-desc {
+  font-size: 10px;
+  color: var(--c3);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 점수 버튼 그룹 */
+.sbg { display: flex; gap: 5px; flex-shrink: 0; }
+.sb {
+  width: 38px;
+  height: 38px;
+  border-radius: 5px;
+  border: 1.5px solid var(--c5);
+  background: var(--cW);
+  color: var(--c3);
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+.sb:active { transform: scale(0.88); }
+.sb.on {
+  background: var(--c0);
+  border-color: var(--c0);
+  color: var(--cW);
+  transform: scale(1.05);
+}
+
+/* 작은 화면 */
+@media (max-width: 374px) {
+  .sb { width: 33px; height: 33px; font-size: 13px; }
+  .sbg { gap: 4px; }
+  .score-row { padding: 9px 14px; }
+}
+@media (max-width: 320px) {
+  .sb { width: 29px; height: 29px; font-size: 12px; }
+  .sbg { gap: 3px; }
+}
+/* 큰 화면 */
+@media (min-width: 430px) {
+  .sb { width: 42px; height: 42px; font-size: 17px; }
+}
+
+/* ============================================================
+   합계 바
+============================================================ */
+.total-bar {
+  background: var(--c0);
+  color: var(--cW);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.total-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--c4);
+}
+.total-val {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -1px;
+}
+.total-max {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--c3);
+  margin-left: 2px;
+}
+.prog-bar {
+  height: 2px;
+  background: var(--c5);
+  overflow: hidden;
+}
+.prog-fill {
+  height: 100%;
+  background: var(--c0);
+  transition: width 0.2s;
+}
+
+/* ============================================================
+   버튼
+============================================================ */
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 48px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border: none;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 0.15s, transform 0.1s;
+  flex-shrink: 0;
+}
+.btn:active { opacity: 0.7; transform: scale(0.98); }
+.btn:disabled { opacity: 0.35; pointer-events: none; }
+.btn-primary   { background: var(--c0); color: var(--cW); }
+.btn-secondary { background: var(--cW); color: var(--c0); border: 1.5px solid var(--c5); }
+.btn-outline   { background: transparent; color: var(--c0); border: 1.5px solid var(--c0); }
+.btn-sm { height: 40px; font-size: 13px; font-weight: 600; }
+.btn-xs { height: 34px; font-size: 12px; font-weight: 600; border-radius: 4px; }
+
+/* 버튼 존 */
+.btn-zone {
+  padding: 14px 18px;
+  display: flex;
+  gap: 8px;
+  background: var(--cW);
+  border-top: 1px solid var(--c6);
+}
+.btn-zone .grow { flex: 1; }
+.btn-zone .grow2 { flex: 2; }
+
+/* ============================================================
+   패턴 선택
+============================================================ */
+.pat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--c6);
+}
+.pat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 6px;
+  border: 1.5px solid var(--c5);
+  border-radius: 6px;
+  background: var(--cW);
+  cursor: pointer;
+  transition: all 0.12s;
+  -webkit-user-select: none;
+  user-select: none;
+  gap: 4px;
+}
+.pat-btn:active { transform: scale(0.95); }
+.pat-btn.on { background: var(--c0); border-color: var(--c0); color: var(--cW); }
+.pat-name { font-size: 13px; font-weight: 700; }
+.pat-en   { font-size: 10px; color: var(--c3); }
+.pat-btn.on .pat-en { color: var(--c4); }
+
+/* 저장 현황 */
+.saved-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--c6);
+}
+.saved-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c3);
+  letter-spacing: 0.3px;
+  margin-right: 2px;
+}
+.saved-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 3px;
+  background: var(--c7);
+  border: 1px solid var(--c5);
+  color: var(--c3);
+}
+.saved-chip.ok { background: var(--c0); border-color: var(--c0); color: var(--cW); }
+
+/* ============================================================
+   영상 프레임
+============================================================ */
+.video-frame {
+  aspect-ratio: 16 / 9;
+  background: var(--c0);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-frame iframe { width: 100%; height: 100%; border: none; }
+.video-ph {
+  text-align: center;
+  color: var(--c2);
+  padding: 20px;
+}
+.video-ph svg { opacity: 0.25; display: block; margin: 0 auto 10px; }
+.video-ph p { font-size: 11px; color: var(--c3); line-height: 1.8; }
+
+/* ============================================================
+   코멘트
+============================================================ */
+.comment-wrap { padding: 12px 18px 16px; }
+.comment-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--c3);
+  margin-bottom: 7px;
+}
+textarea.inp {
+  width: 100%;
+  height: 68px;
+  padding: 10px 12px;
+  resize: none;
+  line-height: 1.6;
+  border-radius: 6px;
+}
+
+/* ============================================================
+   제출 완료 상태
+============================================================ */
+.done-block {
+  display: none;
+  padding: 28px 18px;
+  text-align: center;
+}
+.done-block.show { display: block; }
+.done-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+.done-score {
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+  letter-spacing: -1px;
+}
+.done-sub { font-size: 12px; color: var(--c3); }
+
+/* ============================================================
+   순위
+============================================================ */
+.rank-row {
+  display: flex;
+  align-items: center;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--c6);
+  gap: 14px;
+}
+.rank-row:last-child { border-bottom: none; }
+.rank-row.rank1 { background: var(--c6); }
+.rank-no {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--c4);
+}
+.rank-no.r1 { color: var(--c0); }
+.rank-no.r2 { color: var(--c1); }
+.rank-no.r3 { color: var(--c2); }
+.rank-info { flex: 1; min-width: 0; }
+.rank-comp { font-size: 14px; font-weight: 700; }
+.rank-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.rc {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--c3);
+  border: 1px solid var(--c5);
+  padding: 1px 6px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.rank-score {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--c0);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   스피너
+============================================================ */
+.spin {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: var(--cW);
+  border-radius: 50%;
+  animation: spn 0.5s linear infinite;
+}
+.spin.dark { border-color: var(--c5); border-top-color: var(--c0); }
+@keyframes spn { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   토스트
+============================================================ */
+#toast {
+  position: fixed;
+  bottom: calc(var(--sb) + 18px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--c0);
+  color: var(--cW);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 100px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 9999;
+  max-width: calc(100vw - 40px);
+  text-align: center;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   로그인 화면
+============================================================ */
+#loginScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cW);
+  z-index: 1000;
+  padding-top: var(--st);
+  padding-left: var(--sl);
+  padding-right: var(--sr);
+}
+
+.login-head {
+  flex: 0 0 auto;
+  background: var(--c0);
+  color: var(--cW);
+  padding: 28px 22px 24px;
+}
+.login-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--c3);
+  margin-bottom: 12px;
+}
+.login-h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+.login-sub2 {
+  font-size: 12px;
+  color: var(--c4);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.login-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--sb) + 32px);
+}
+
+/* 심사위원 명단 */
+.judge-list-head {
+  padding: 14px 22px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--c3);
+  border-bottom: 1px solid var(--c6);
+}
+.judge-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 22px;
+  border-bottom: 1px solid var(--c6);
+  gap: 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.judge-item:active { background: var(--c7); }
+.judge-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--c0);
+  color: var(--cW);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  letter-spacing: 0;
+}
+/* 역할별 아바타 명도 */
+.av-head     { background: var(--c0); }
+.av-visual   { background: var(--c2); }
+.av-technical{ background: var(--c3); }
+.judge-name-wrap { flex: 1; min-width: 0; }
+.judge-nm {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--c0);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.judge-rl {
+  font-size: 12px;
+  color: var(--c3);
+  margin-top: 1px;
+}
+.judge-select-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--c4);
+  padding: 2px 8px;
+  border: 1px solid var(--c5);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* 구분선 */
+.divider {
+  height: 1px;
+  background: var(--c5);
+  margin: 0;
+}
+.section-gap {
+  height: 10px;
+  background: var(--c7);
+  border-top: 1px solid var(--c6);
+  border-bottom: 1px solid var(--c6);
+}
+
+/* 로그인 폼 */
+.login-form { padding: 22px 22px; }
+.login-form-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  letter-spacing: -0.3px;
+}
+.lf-row { margin-bottom: 14px; }
+.lf-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--c3);
+  margin-bottom: 6px;
+}
+.lf-inp {
+  width: 100%;
+  height: 50px;
+  background: var(--c7);
+  border: 1.5px solid var(--c5);
+  border-radius: 8px;
+  padding: 0 16px;
+  font-size: 16px;   /* iOS에서 zoom 방지 */
+  color: var(--c0);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lf-inp:focus { border-color: var(--c0); background: var(--cW); }
+.lf-inp::placeholder { color: var(--c4); }
+
+.login-err {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c1);
+  margin-top: 8px;
+  min-height: 18px;
+  text-align: center;
+}
+.login-btn {
+  width: 100%;
+  height: 52px;
+  background: var(--c0);
+  color: var(--cW);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s;
+}
+.login-btn:active { opacity: 0.7; }
+
+/* 로딩 오버레이 */
+#loadingOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.88);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 8000;
+}
+#loadingOverlay.show { display: flex; }
+.loading-txt { font-size: 13px; color: var(--c3); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ 로그인 ═══════════════════ -->
+<div id="loginScreen">
+  <div class="login-head">
+    <div class="login-eyebrow">Korea Coffee Art Championship</div>
+    <div class="login-h1">KCAC 2026<br>채점 시스템</div>
+    <div class="login-sub2">심사위원 전용 · Judge Scoring System</div>
+  </div>
+
+  <div class="login-body">
+
+    <!-- 심사위원 명단 -->
+    <div class="judge-list-head">심사위원 명단</div>
+    <div id="judgeListEl">
+      <div style="padding:18px 22px;font-size:12px;color:#999;">명단을 불러오는 중입니다...</div>
+    </div>
+
+    <div class="section-gap"></div>
+
+    <!-- 로그인 폼 -->
+    <div class="login-form">
+      <div class="login-form-title">로그인</div>
+      <div class="lf-row">
+        <div class="lf-lbl">이름</div>
+        <input class="lf-inp" id="li-name" type="text"
+               placeholder="성함을 입력하세요"
+               autocomplete="name"
+               autocorrect="off" autocapitalize="off">
+      </div>
+      <div class="lf-row">
+        <div class="lf-lbl">전화번호</div>
+        <input class="lf-inp" id="li-phone" type="tel"
+               placeholder="01000000000"
+               autocomplete="tel">
+      </div>
+      <div class="login-err" id="li-err"></div>
+      <button class="login-btn" id="li-btn" onclick="doLogin()">
+        <span>로그인</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════ 앱 본체 ═══════════════════ -->
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-logo">KCAC 2026</div>
+    <div class="topbar-right">
+      <div class="topbar-name" id="topName">—</div>
+      <div class="topbar-role" id="topRole">—</div>
+    </div>
+  </div>
+  <div class="tabbar" id="tabbar"></div>
+  <div class="panels" id="panels"></div>
+</div>
+
+<!-- 로딩 -->
+<div id="loadingOverlay">
+  <div class="spin dark"></div>
+  <div class="loading-txt" id="loadTxt">처리 중...</div>
+</div>
+
+<!-- 토스트 -->
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════
+   KCAC 2026  |  채점 앱 스크립트
+═══════════════════════════════════════════════════ */
+
+const GAS = '<?= ScriptApp.getService().getUrl() ?>';
+
+const S = {
+  judge:      null,
+  scores:     {},
+  timers:     {},
+  timerSec:   {},
+  saved:      {},          // prelim pattern saves
+  curPat:     null,
+  submitted:  {},
+};
+
+/* ═══════════════ 로그인 ═══════════════ */
+async function initLogin() {
+  const r = await api('getJudgeList', {});
+  const el = document.getElementById('judgeListEl');
+  if (!r.ok || !r.list?.length) {
+    el.innerHTML = '<div style="padding:16px 22px;font-size:12px;color:#999;">명단을 불러올 수 없습니다. 관리자에게 문의하세요.</div>';
+    return;
+  }
+  el.innerHTML = r.list.map(j => {
+    const cls = { HEAD:'av-head', VISUAL:'av-visual', TECHNICAL:'av-technical' }[j.role] || 'av-head';
+    const initials = j.name.charAt(0);
+    return `<div class="judge-item" onclick="fillName('${j.name}')">
+      <div class="judge-avatar ${cls}">${initials}</div>
+      <div class="judge-name-wrap">
+        <div class="judge-nm">${j.name}</div>
+        <div class="judge-rl">${j.roleLabel || j.role}</div>
+      </div>
+      <div class="judge-select-hint">선택</div>
+    </div>`;
+  }).join('');
+}
+
+function fillName(name) {
+  document.getElementById('li-name').value = name;
+  document.getElementById('li-phone').focus();
+}
+
+async function doLogin() {
+  const name  = document.getElementById('li-name').value.trim();
+  const phone = document.getElementById('li-phone').value.replace(/\D/g,'');
+  const errEl = document.getElementById('li-err');
+  errEl.textContent = '';
+
+  if (!name)  { errEl.textContent = '이름을 입력해 주세요.'; return; }
+  if (!phone) { errEl.textContent = '전화번호를 입력해 주세요.'; return; }
+
+  loading('로그인 중...');
+  const r = await api('login', { name, phone });
+  loadingOff();
+
+  if (r.ok) {
+    S.judge = r.judge;
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('topName').textContent = r.judge.name;
+    document.getElementById('topRole').textContent = r.judge.roleLabel || r.judge.role;
+    document.getElementById('app').classList.add('visible');
+    buildApp();
+  } else {
+    errEl.textContent = r.msg || '로그인에 실패했습니다.';
+  }
+}
+
+/* ═══════════════ 앱 빌드 ═══════════════ */
+const TAB_MAP = {
+  HEAD:      ['prelim','visual','sensory','ranking'],
+  VISUAL:    ['prelim','visual','sensory','ranking'],
+  TECHNICAL: ['prelim','technical','ranking'],
+  ADMIN:     ['prelim','visual','sensory','technical','ranking'],
+};
+const TAB_INFO = {
+  prelim:    { label:'예선',      pill:'패턴' },
+  visual:    { label:'결선 패턴', pill:'영상' },
+  sensory:   { label:'센서리',    pill:'3분' },
+  technical: { label:'테크니컬', pill:'즉시' },
+  ranking:   { label:'순위',      pill:null },
+};
+
+function buildApp() {
+  const role = S.judge.role;
+  const tabs = TAB_MAP[role] || TAB_MAP.ADMIN;
+  const tbar = document.getElementById('tabbar');
+  const pcon = document.getElementById('panels');
+  tbar.innerHTML = ''; pcon.innerHTML = '';
+
+  tabs.forEach((id, i) => {
+    const m = TAB_INFO[id];
+    const t = document.createElement('div');
+    t.className = 'tab' + (i === 0 ? ' on' : '');
+    t.id = 'tab-' + id;
+    t.onclick = () => showTab(id);
+    t.innerHTML = m.label + (m.pill ? ` <span class="tab-pill">${m.pill}</span>` : '');
+    tbar.appendChild(t);
+
+    const p = document.createElement('div');
+    p.className = 'panel' + (i === 0 ? ' on' : '');
+    p.id = 'panel-' + id;
+    pcon.appendChild(p);
+    renderPanel(id);
+  });
+}
+
+function showTab(id) {
+  document.querySelectorAll('.tab').forEach(e => e.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(e => e.classList.remove('on'));
+  document.getElementById('tab-' + id)?.classList.add('on');
+  const p = document.getElementById('panel-' + id);
+  if (p) { p.classList.add('on'); p.scrollTop = 0; }
+  if (id === 'ranking') fetchRanking();
+}
+
+function renderPanel(id) {
+  const p = document.getElementById('panel-' + id);
+  if (!p) return;
+  const map = {
+    prelim:    htmlPrelim,
+    visual:    () => htmlVisual(S.judge?.role),
+    sensory:   htmlSensory,
+    technical: htmlTechnical,
+    ranking:   htmlRanking,
+  };
+  p.innerHTML = (map[id] || (() => ''))();
+}
+
+/* ═══════════════ HTML 블록 헬퍼 ═══════════════ */
+function sRow(id, name, desc) {
+  const btns = [1,2,3,4,5].map(n =>
+    `<button class="sb" id="sb-${id}-${n}" onclick="pick('${id}',${n})">${n}</button>`
+  ).join('');
+  return `<div class="score-row">
+    <div class="score-meta">
+      <div class="score-name">${name}</div>
+      <div class="score-desc">${desc}</div>
+    </div>
+    <div class="sbg" id="sbg-${id}">${btns}</div>
+  </div>`;
+}
+
+function pick(id, val) {
+  S.scores[id] = val;
+  const g = document.getElementById('sbg-' + id);
+  if (!g) return;
+  g.querySelectorAll('.sb').forEach(b => {
+    b.className = 'sb';
+    if (+b.textContent === val) b.classList.add('on');
+  });
+  recalc();
+}
+
+function recalc() {
+  [
+    { ids:['pre-s1','pre-s2','pre-s3'],                                   max:15, tv:'pre-tv', pb:'pre-pb' },
+    { ids:['vis-s1','vis-s2','vis-s3','vis-s4','vis-s5','vis-s6'],        max:30, tv:'vis-tv', pb:'vis-pb' },
+    { ids:['vis-s1','vis-s2','vis-s3','vis-s4','vis-s5'],                 max:25, tv:'vis-tv', pb:'vis-pb' },  // non-head (overrides above)
+    { ids:['sen-s1','sen-s2','sen-s3','sen-s4'],                           max:20, tv:'sen-tv', pb:'sen-pb' },
+    { ids:['tec-s1','tec-s2','tec-s3','tec-s4','tec-s5','tec-s6','tec-s7'], max:35, tv:'tec-tv', pb:'tec-pb' },
+  ].forEach(g => {
+    const tv = document.getElementById(g.tv);
+    const pb = document.getElementById(g.pb);
+    if (!tv) return;
+    const tot = g.ids.reduce((s, id) => s + (S.scores[id] || 0), 0);
+    tv.textContent = tot;
+    if (pb) pb.style.width = (tot / g.max * 100) + '%';
+  });
+  // prelim mini-recalc
+  const preTot = (S.scores['pre-s1']||0)+(S.scores['pre-s2']||0)+(S.scores['pre-s3']||0);
+  const ptv = document.getElementById('pre-tv'); if (ptv) ptv.textContent = preTot;
+  const ppb = document.getElementById('pre-pb'); if (ppb) ppb.style.width = (preTot/15*100)+'%';
+  updateSavedChips();
+}
+
+/* ═══════════════ 예선 ═══════════════ */
+function htmlPrelim() {
+  return `
+<div class="card">
+  <div class="card-title">예선 패턴 평가</div>
+  <div class="card-sub">지정 패턴 3개 각각 채점 · 센서리 없음</div>
+  <div class="timer-block">
+    <div class="timer-val" id="prelim-timer">07:00</div>
+    <div class="timer-lbl">시연 시간 — 준비 5분 별도</div>
+    <div class="timer-row">
+      <button class="btn btn-primary btn-sm grow2" onclick="startTimer('prelim',420)">시작</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetTimer('prelim',420)">리셋</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">참가자 정보</div>
+  <div class="field">
+    <span class="field-lbl">참가자</span>
+    <input class="inp" id="pre-comp" type="number" placeholder="번호 입력">
+  </div>
+  <div class="field">
+    <span class="field-lbl">라운드</span>
+    <select class="inp" id="pre-round">
+      <option>A조</option><option>B조</option><option>C조</option>
+    </select>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">지정 패턴</div>
+  <div class="pat-grid">
+    <div class="pat-btn" id="pat-tulip"   onclick="selPat('tulip','튤립')">
+      <div class="pat-name">튤립</div><div class="pat-en">Tulip</div>
+    </div>
+    <div class="pat-btn" id="pat-rosetta" onclick="selPat('rosetta','로제타')">
+      <div class="pat-name">로제타</div><div class="pat-en">Rosetta</div>
+    </div>
+    <div class="pat-btn" id="pat-heart"   onclick="selPat('heart','하트')">
+      <div class="pat-name">하트</div><div class="pat-en">Heart</div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label" id="pre-score-lbl">채점 — 패턴을 먼저 선택하세요</div>
+  ${sRow('pre-s1','완성도','필수 구성요소 완성 · 레이어 구분 · 형태 정확도')}
+  ${sRow('pre-s2','표면 품질','기포 없음 · 광택 · 경계 선명도 · 번짐 여부')}
+  ${sRow('pre-s3','위치 & 대칭','컵 중심 정렬 · 좌우 대칭 · 크기 비율')}
+  <div class="prog-bar"><div class="prog-fill" id="pre-pb" style="width:0%"></div></div>
+  <div class="total-bar">
+    <div class="total-lbl">패턴 소계</div>
+    <div><span class="total-val" id="pre-tv">0</span><span class="total-max"> / 15</span></div>
+  </div>
+  <div class="saved-row">
+    <span class="saved-lbl">저장 현황</span>
+    <span class="saved-chip" id="sc-tulip">튤립</span>
+    <span class="saved-chip" id="sc-rosetta">로제타</span>
+    <span class="saved-chip" id="sc-heart">하트</span>
+  </div>
+  <div class="btn-zone">
+    <button class="btn btn-secondary btn-sm" onclick="clearPat()">초기화</button>
+    <button class="btn btn-outline btn-sm grow" onclick="savePat()">이 패턴 저장</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="comment-wrap">
+    <div class="comment-lbl">코멘트 (선택)</div>
+    <textarea class="inp" id="pre-comment" placeholder="심사 메모를 입력하세요."></textarea>
+  </div>
+  <div class="btn-zone" id="pre-submit-zone" style="display:none;">
+    <button class="btn btn-primary grow" id="pre-submit-btn" onclick="submitPrelim()">
+      전체 제출 — 3패턴 완료
+    </button>
+  </div>
+  <div class="done-block" id="pre-done">
+    <div class="done-title">제출 완료</div>
+    <div class="done-score" id="pre-done-score"></div>
+    <div class="done-sub">예선 채점이 기록되었습니다.</div>
+  </div>
+</div>`;
+}
+
+function selPat(id, name) {
+  S.curPat = id;
+  document.querySelectorAll('.pat-btn').forEach(b => b.classList.remove('on'));
+  document.getElementById('pat-' + id)?.classList.add('on');
+  const lbl = document.getElementById('pre-score-lbl');
+  if (lbl) lbl.textContent = '채점 — ' + name;
+
+  // 기존 저장값 복원
+  const sv = S.saved[id] || {};
+  ['s1','s2','s3'].forEach(k => {
+    const v = sv[k] || 0;
+    S.scores['pre-' + k] = v;
+    const g = document.getElementById('sbg-pre-' + k);
+    if (!g) return;
+    g.querySelectorAll('.sb').forEach(b => {
+      b.className = 'sb';
+      if (v && +b.textContent === v) b.classList.add('on');
+    });
+  });
+  recalc();
+}
+
+function clearPat() {
+  if (!S.curPat) { toast('패턴을 먼저 선택하세요.'); return; }
+  delete S.saved[S.curPat];
+  ['pre-s1','pre-s2','pre-s3'].forEach(id => { S.scores[id] = 0; });
+  document.querySelectorAll('#sbg-pre-s1 .sb, #sbg-pre-s2 .sb, #sbg-pre-s3 .sb')
+    .forEach(b => b.className = 'sb');
+  recalc();
+}
+
+function savePat() {
+  if (!S.curPat) { toast('패턴을 먼저 선택하세요.'); return; }
+  const s1 = S.scores['pre-s1'], s2 = S.scores['pre-s2'], s3 = S.scores['pre-s3'];
+  if (!s1||!s2||!s3) { toast('3개 항목을 모두 채점하세요.'); return; }
+  S.saved[S.curPat] = { s1, s2, s3 };
+  updateSavedChips();
+  toast('저장되었습니다.');
+}
+
+function updateSavedChips() {
+  const nm = { tulip:'튤립', rosetta:'로제타', heart:'하트' };
+  Object.entries(nm).forEach(([k,v]) => {
+    const el = document.getElementById('sc-' + k);
+    if (!el) return;
+    if (S.saved[k]) {
+      const t = (S.saved[k].s1||0)+(S.saved[k].s2||0)+(S.saved[k].s3||0);
+      el.textContent = v + '  ' + t; el.classList.add('ok');
+    } else {
+      el.textContent = v; el.classList.remove('ok');
+    }
+  });
+  const all3 = Object.keys(S.saved).length >= 3;
+  const zone = document.getElementById('pre-submit-zone');
+  if (zone) zone.style.display = all3 ? 'flex' : 'none';
+}
+
+async function submitPrelim() {
+  if (S.submitted.prelim) return;
+  const comp = document.getElementById('pre-comp')?.value;
+  if (!comp) { toast('참가자 번호를 입력하세요.'); return; }
+  if (Object.keys(S.saved).length < 3) { toast('3개 패턴을 모두 저장하세요.'); return; }
+
+  const nm = { tulip:'튤립', rosetta:'로제타', heart:'하트' };
+  const ps = Object.entries(S.saved).map(([k,v]) => ({ pattern: nm[k], ...v }));
+  const elapsed = 420 - (S.timerSec.prelim ?? 420);
+
+  loading('제출 중...');
+  const r = await api('submitPrelim', {
+    judgeName: S.judge.name, judgeRole: S.judge.role, judgeRoleLabel: S.judge.roleLabel,
+    compNo: comp, round: document.getElementById('pre-round')?.value || 'A조',
+    patternScores: ps, elapsedSec: elapsed,
+    comment: document.getElementById('pre-comment')?.value || '',
+  });
+  loadingOff();
+
+  if (r.ok) {
+    S.submitted.prelim = true;
+    document.getElementById('pre-submit-zone').style.display = 'none';
+    document.getElementById('pre-done').classList.add('show');
+    document.getElementById('pre-done-score').textContent = r.total + ' / 45점';
+    toast('예선 채점이 제출되었습니다.');
+  } else { toast(r.msg || '오류가 발생했습니다.'); }
+}
+
+/* ═══════════════ 결선 비주얼 ═══════════════ */
+function htmlVisual(role) {
+  const isHead = role === 'HEAD' || role === 'ADMIN';
+  const max = isHead ? 30 : 25;
+  return `
+<div class="card">
+  <div class="card-title">결선 — 비주얼 패턴 평가</div>
+  <div class="card-sub">영상 URL 입력 후 재생하며 채점 · 라이브 또는 녹화 모두 지원</div>
+  ${isHead ? '<div class="notice">헤드 심사위원 — 패턴 5항목 + 프레젠테이션 항목 ⑥ 추가 평가</div>' : ''}
+</div>
+
+<div class="card">
+  <div class="sec-label">영상</div>
+  <div class="field" style="flex-wrap:wrap;gap:8px;padding:12px 18px;">
+    <input class="inp" id="vis-url" type="url" placeholder="YouTube / Google Drive URL" style="flex:1;min-width:180px;">
+    <button class="btn btn-secondary btn-sm" onclick="loadVideo()" style="flex:0 0 auto;padding:0 16px;">재생</button>
+  </div>
+  <div class="video-frame" id="video-frame">
+    <div class="video-ph">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>
+      <p>YouTube 또는 Google Drive 링크를<br>붙여넣고 재생을 누르세요.</p>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">참가자 정보</div>
+  <div class="field">
+    <span class="field-lbl">참가자</span>
+    <input class="inp" id="vis-comp" type="number" placeholder="번호 입력">
+  </div>
+  <div class="field">
+    <span class="field-lbl">주제</span>
+    <input class="inp" id="vis-theme" type="text" placeholder="예) 사계절">
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">패턴 평가 — 5항목 × 5점</div>
+  ${sRow('vis-s1','① 패턴 완성도','의도된 구성요소 완성 · 형태 정확도')}
+  ${sRow('vis-s2','② 패턴 일관성','두 잔 간 크기 · 배치 · 밀도 편차')}
+  ${sRow('vis-s3','③ 표면 품질','기포 · 광택 · 경계 선명도 · 번짐')}
+  ${sRow('vis-s4','④ 위치 & 대칭','중심 정렬 · 좌우 대칭 · 크기 비율')}
+  ${sRow('vis-s5','⑤ 창작성 & 주제 해석','독창성 · 난이도 · 구두 설명 연계')}
+</div>
+
+${isHead ? `<div class="card">
+  <div class="sec-label">프레젠테이션 — 헤드 심사위원 전담</div>
+  ${sRow('vis-s6','⑥ 프레젠테이션 능력','주제 설명 명확성 · 논리성 · 전달력 · 시간 활용')}
+</div>` : ''}
+
+<div class="card">
+  <div class="prog-bar"><div class="prog-fill" id="vis-pb" style="width:0%"></div></div>
+  <div class="total-bar">
+    <div class="total-lbl">비주얼 합계</div>
+    <div><span class="total-val" id="vis-tv">0</span><span class="total-max"> / ${max}</span></div>
+  </div>
+  <div class="comment-wrap">
+    <div class="comment-lbl">코멘트 (선택)</div>
+    <textarea class="inp" id="vis-comment" placeholder="심사 메모를 입력하세요."></textarea>
+  </div>
+  <div class="btn-zone">
+    <button class="btn btn-primary grow" id="vis-submit-btn" onclick="submitVisual()">
+      비주얼 평가 제출
+    </button>
+  </div>
+  <div class="done-block" id="vis-done">
+    <div class="done-title">제출 완료</div>
+    <div class="done-score" id="vis-done-score"></div>
+    <div class="done-sub">결선 비주얼 채점이 기록되었습니다.</div>
+  </div>
+</div>`;
+}
+
+function loadVideo() {
+  const url = document.getElementById('vis-url')?.value || '';
+  const fr  = document.getElementById('video-frame');
+  if (!fr || !url) return;
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([A-Za-z0-9_-]{11})/);
+  const gd = url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+  let src = '';
+  if (yt) src = `https://www.youtube.com/embed/${yt[1]}?autoplay=1`;
+  else if (gd) src = `https://drive.google.com/file/d/${gd[1]}/preview`;
+  if (src) fr.innerHTML = `<iframe src="${src}" allowfullscreen allow="autoplay"></iframe>`;
+  else toast('YouTube 또는 Google Drive URL만 지원합니다.');
+}
+
+async function submitVisual() {
+  if (S.submitted.visual) return;
+  const comp   = document.getElementById('vis-comp')?.value;
+  if (!comp) { toast('참가자 번호를 입력하세요.'); return; }
+  const isHead = S.judge.role === 'HEAD' || S.judge.role === 'ADMIN';
+  const req = ['vis-s1','vis-s2','vis-s3','vis-s4','vis-s5'];
+  if (isHead) req.push('vis-s6');
+  if (req.some(id => !S.scores[id])) { toast('모든 항목을 채점하세요.'); return; }
+
+  loading('제출 중...');
+  const r = await api('submitVisual', {
+    judgeName: S.judge.name, judgeRole: S.judge.role, judgeRoleLabel: S.judge.roleLabel,
+    compNo: comp, theme: document.getElementById('vis-theme')?.value || '',
+    videoUrl: document.getElementById('vis-url')?.value || '',
+    s1: S.scores['vis-s1'], s2: S.scores['vis-s2'], s3: S.scores['vis-s3'],
+    s4: S.scores['vis-s4'], s5: S.scores['vis-s5'],
+    s6: isHead ? S.scores['vis-s6'] : null,
+    comment: document.getElementById('vis-comment')?.value || '',
+  });
+  loadingOff();
+
+  if (r.ok) {
+    S.submitted.visual = true;
+    document.getElementById('vis-submit-btn').closest('.btn-zone').style.display = 'none';
+    document.getElementById('vis-done').classList.add('show');
+    document.getElementById('vis-done-score').textContent = r.total + '점';
+    toast('비주얼 채점이 제출되었습니다.');
+  } else { toast(r.msg || '오류가 발생했습니다.'); }
+}
+
+/* ═══════════════ 결선 센서리 ═══════════════ */
+function htmlSensory() {
+  return `
+<div class="card">
+  <div class="card-title">결선 — 센서리 평가</div>
+  <div class="card-sub">음료 수령 즉시 타이머 시작 · 3분 이내 완료 필수</div>
+  <div class="notice">음료를 받는 즉시 타이머를 시작하세요. 3:00 이내에 제출해야 합니다.</div>
+  <div class="timer-block">
+    <div class="timer-val" id="sensory-timer">03:00</div>
+    <div class="timer-lbl">센서리 평가 제한 시간</div>
+    <div class="timer-row">
+      <button class="btn btn-primary btn-sm grow2" onclick="startTimer('sensory',180)">음료 수령 — 시작</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetTimer('sensory',180)">리셋</button>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">참가자 번호</div>
+  <div class="field">
+    <span class="field-lbl">참가자</span>
+    <input class="inp" id="sen-comp" type="number" placeholder="번호 입력">
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">센서리 평가 — 4항목 × 5점</div>
+  ${sRow('sen-s1','① 에스프레소 품질','크레마 색·균일·지속성 / 채널링 / 아로마 강도')}
+  ${sRow('sen-s2','② 우유 텍스처 & 온도','마이크로폼 품질 / 55~65°C / 혼합 균일성')}
+  ${sRow('sen-s3','③ 맛 밸런스','단·쓴·산미 조화 / 에스프레소 캐릭터 / 일관성')}
+  ${sRow('sen-s4','④ 풍미 복합성 & 여운','레이어 다양성 / 바디감 / 여운 길이·품질')}
+  <div class="prog-bar"><div class="prog-fill" id="sen-pb" style="width:0%"></div></div>
+  <div class="total-bar">
+    <div class="total-lbl">센서리 합계</div>
+    <div><span class="total-val" id="sen-tv">0</span><span class="total-max"> / 20</span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="comment-wrap">
+    <div class="comment-lbl">코멘트 (선택)</div>
+    <textarea class="inp" id="sen-comment" placeholder="심사 메모를 입력하세요."></textarea>
+  </div>
+  <div class="btn-zone">
+    <button class="btn btn-primary grow" id="sen-submit-btn" onclick="submitSensory()">
+      센서리 평가 제출
+    </button>
+  </div>
+  <div class="done-block" id="sen-done">
+    <div class="done-title">제출 완료</div>
+    <div class="done-score" id="sen-done-score"></div>
+    <div class="done-sub">센서리 채점이 기록되었습니다.</div>
+  </div>
+</div>`;
+}
+
+async function submitSensory() {
+  if (S.submitted.sensory) return;
+  const comp = document.getElementById('sen-comp')?.value;
+  if (!comp) { toast('참가자 번호를 입력하세요.'); return; }
+  if (['sen-s1','sen-s2','sen-s3','sen-s4'].some(id => !S.scores[id])) {
+    toast('4항목을 모두 채점하세요.'); return;
+  }
+  const elapsed = 180 - (S.timerSec.sensory ?? 180);
+  stopTimer('sensory');
+
+  loading('제출 중...');
+  const r = await api('submitSensory', {
+    judgeName: S.judge.name, judgeRole: S.judge.role, judgeRoleLabel: S.judge.roleLabel,
+    compNo: comp,
+    s1: S.scores['sen-s1'], s2: S.scores['sen-s2'],
+    s3: S.scores['sen-s3'], s4: S.scores['sen-s4'],
+    elapsed, comment: document.getElementById('sen-comment')?.value || '',
+  });
+  loadingOff();
+
+  if (r.ok) {
+    S.submitted.sensory = true;
+    document.getElementById('sen-submit-btn').closest('.btn-zone').style.display = 'none';
+    document.getElementById('sen-done').classList.add('show');
+    document.getElementById('sen-done-score').textContent = r.total + ' / 20점';
+    toast('센서리 채점이 제출되었습니다.');
+  } else { toast(r.msg || '오류가 발생했습니다.'); }
+}
+
+/* ═══════════════ 테크니컬 ═══════════════ */
+function htmlTechnical() {
+  return `
+<div class="card">
+  <div class="card-title">테크니컬 평가</div>
+  <div class="card-sub">테크니컬 심사위원 전담 · 즉시 채점 · 1~5점 세분화</div>
+</div>
+
+<div class="card">
+  <div class="sec-label">참가자 정보</div>
+  <div class="field">
+    <span class="field-lbl">참가자</span>
+    <input class="inp" id="tec-comp" type="number" placeholder="번호 입력">
+  </div>
+  <div class="field">
+    <span class="field-lbl">라운드</span>
+    <select class="inp" id="tec-round"><option>예선</option><option>결선</option></select>
+  </div>
+</div>
+
+<div class="card">
+  <div class="sec-label">위생 & 정리정돈 — 3항목 × 5점</div>
+  ${sRow('tec-s1','① 작업 공간 (시작 전)','1: 심각 불량 · 3: 보통 · 5: 완벽 정리정돈')}
+  ${sRow('tec-s2','② 스팀 완드 위생','퍼지·클리닝 타이밍과 완전성 (사용 전·후)')}
+  ${sRow('tec-s3','③ 도구 & 피처 청결','사용 중 오염 없음 · 항상 청결 유지')}
+</div>
+
+<div class="card">
+  <div class="sec-label">장비 조작 정확성 — 2항목 × 5점</div>
+  ${sRow('tec-s4','④ 탬핑 & 도징','1: 심한 편차 · 3: 미세 편차 · 5: 수평·균일')}
+  ${sRow('tec-s5','⑤ 에스프레소 추출 일관성','추출 시간 준수 · 채널링 없음 · 잔 간 균일')}
+</div>
+
+<div class="card">
+  <div class="sec-label">우유 스티밍 & 작업 흐름 — 2항목 × 5점</div>
+  ${sRow('tec-s6','⑥ 스티밍 완성도','마이크로폼 품질 · 벨벳 질감 · 온도(55~65°C)')}
+  ${sRow('tec-s7','⑦ 작업 흐름 & 효율성','낭비 동작 없음 · 동선 최적화 · 시간 관리')}
+</div>
+
+<div class="card">
+  <div class="prog-bar"><div class="prog-fill" id="tec-pb" style="width:0%"></div></div>
+  <div class="total-bar">
+    <div class="total-lbl">테크니컬 합계</div>
+    <div><span class="total-val" id="tec-tv">0</span><span class="total-max"> / 35</span></div>
+  </div>
+  <div class="comment-wrap">
+    <div class="comment-lbl">코멘트 (선택)</div>
+    <textarea class="inp" id="tec-comment" placeholder="심사 메모를 입력하세요."></textarea>
+  </div>
+  <div class="btn-zone">
+    <button class="btn btn-primary grow" id="tec-submit-btn" onclick="submitTech()">
+      테크니컬 평가 제출
+    </button>
+  </div>
+  <div class="done-block" id="tec-done">
+    <div class="done-title">제출 완료</div>
+    <div class="done-score" id="tec-done-score"></div>
+    <div class="done-sub">테크니컬 채점이 기록되었습니다.</div>
+  </div>
+</div>`;
+}
+
+async function submitTech() {
+  if (S.submitted.technical) return;
+  const comp = document.getElementById('tec-comp')?.value;
+  if (!comp) { toast('참가자 번호를 입력하세요.'); return; }
+  const ids = ['tec-s1','tec-s2','tec-s3','tec-s4','tec-s5','tec-s6','tec-s7'];
+  if (ids.some(id => !S.scores[id])) { toast('7항목을 모두 채점하세요.'); return; }
+
+  loading('제출 중...');
+  const r = await api('submitTech', {
+    judgeName: S.judge.name, judgeRole: S.judge.role, judgeRoleLabel: S.judge.roleLabel,
+    compNo: comp, round: document.getElementById('tec-round')?.value || '결선',
+    s1: S.scores['tec-s1'], s2: S.scores['tec-s2'], s3: S.scores['tec-s3'],
+    s4: S.scores['tec-s4'], s5: S.scores['tec-s5'],
+    s6: S.scores['tec-s6'], s7: S.scores['tec-s7'],
+    comment: document.getElementById('tec-comment')?.value || '',
+  });
+  loadingOff();
+
+  if (r.ok) {
+    S.submitted.technical = true;
+    document.getElementById('tec-submit-btn').closest('.btn-zone').style.display = 'none';
+    document.getElementById('tec-done').classList.add('show');
+    document.getElementById('tec-done-score').textContent = r.total + ' / 35점';
+    toast('테크니컬 채점이 제출되었습니다.');
+  } else { toast(r.msg || '오류가 발생했습니다.'); }
+}
+
+/* ═══════════════ 순위 ═══════════════ */
+function htmlRanking() {
+  return `
+<div class="card">
+  <div class="card-title">채점 현황 & 순위</div>
+  <div class="card-sub">채점 제출 시 자동 갱신 · 결선 총점 기준 정렬</div>
+  <div class="btn-zone">
+    <button class="btn btn-secondary btn-sm grow" onclick="fetchRanking()">새로고침</button>
+  </div>
+</div>
+<div class="card" id="ranking-body">
+  <div style="padding:32px 18px;text-align:center;font-size:13px;color:#aaa;">
+    데이터를 불러오는 중입니다...
+  </div>
+</div>`;
+}
+
+async function fetchRanking() {
+  const el = document.getElementById('ranking-body');
+  if (!el) return;
+  const r = await api('getRanking', {});
+  if (!r.ok || !r.ranking?.length) {
+    el.innerHTML = '<div style="padding:32px 18px;text-align:center;font-size:13px;color:#aaa;">아직 집계된 데이터가 없습니다.</div>';
+    return;
+  }
+  el.innerHTML = r.ranking.map(row => {
+    const nc = row.rank <= 3 ? ' r' + row.rank : '';
+    const top = row.rank === 1 ? ' rank1' : '';
+    return `<div class="rank-row${top}">
+      <div class="rank-no${nc}">${row.rank}</div>
+      <div class="rank-info">
+        <div class="rank-comp">참가자 #${row.compNo}</div>
+        <div class="rank-chips">
+          <span class="rc">예선 ${row.prelimAvg || '—'}</span>
+          <span class="rc">비주얼 ${row.visualAvg || '—'}</span>
+          <span class="rc">센서리 ${row.sensoryAvg || '—'}</span>
+          <span class="rc">테크 ${row.techAvg || '—'}</span>
+        </div>
+      </div>
+      <div class="rank-score">${row.finalTotal || row.prelimAvg || '—'}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════ 타이머 ═══════════════ */
+function startTimer(id, secs) {
+  if (S.timers[id]) return;
+  if (S.timerSec[id] === undefined) S.timerSec[id] = secs;
+  S.timers[id] = setInterval(() => {
+    S.timerSec[id]--;
+    const el = document.getElementById(id + '-timer');
+    if (!el) { stopTimer(id); return; }
+    const m = Math.floor(S.timerSec[id] / 60);
+    const s = S.timerSec[id] % 60;
+    el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    const thr = id === 'sensory' ? 30 : 60;
+    const urgent = S.timerSec[id] <= thr;
+    const warn   = S.timerSec[id] <= secs * 0.4;
+    el.className = 'timer-val' + (urgent ? ' urgent' : warn ? ' warn' : '');
+    if (S.timerSec[id] <= 0) { stopTimer(id); el.textContent = '00:00'; toast('시간이 종료되었습니다.'); }
+  }, 1000);
+}
+function stopTimer(id) {
+  if (S.timers[id]) { clearInterval(S.timers[id]); S.timers[id] = null; }
+}
+function resetTimer(id, secs) {
+  stopTimer(id);
+  S.timerSec[id] = secs;
+  const el = document.getElementById(id + '-timer');
+  if (el) {
+    const m = Math.floor(secs/60), s = secs%60;
+    el.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    el.className = 'timer-val';
+  }
+}
+
+/* ═══════════════ API ═══════════════ */
+async function api(action, data) {
+  try {
+    const res = await fetch(GAS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...data }),
+    });
+    return await res.json();
+  } catch(e) { return { ok: false, msg: '네트워크 오류: ' + e.message }; }
+}
+
+/* ═══════════════ 유틸 ═══════════════ */
+function loading(txt) {
+  document.getElementById('loadTxt').textContent = txt || '처리 중...';
+  document.getElementById('loadingOverlay').classList.add('show');
+}
+function loadingOff() {
+  document.getElementById('loadingOverlay').classList.remove('show');
+}
+
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+/* ═══════════════ 초기화 ═══════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('li-name').addEventListener('keydown', e => { if (e.key==='Enter') document.getElementById('li-phone').focus(); });
+  document.getElementById('li-phone').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+  initLogin();
+});
+</script>
+</body>
+</html>
